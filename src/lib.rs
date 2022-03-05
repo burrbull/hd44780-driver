@@ -8,8 +8,37 @@ use embedded_hal::blocking::delay::{DelayMs, DelayUs};
 use embedded_hal::blocking::i2c;
 use embedded_hal::digital::v2::OutputPin;
 
+/// A digital output "port"
+///
+/// `N` is number of pins in "port"
+///
+/// **NOTE** The "port" doesn't necessarily has to match a hardware GPIO port;
+/// it could for instance be a 4-bit ports made up of non contiguous pins, say
+/// `PA0`, `PA3`, `PA10` and `PA13`.
+pub trait OutputPort<const N: usize> {
+	/// Error type
+	type Error;
+	/// Outputs `word` on the port pins
+	///
+	/// # Contract
+	///
+	/// The state of all the port pins will change atomically ("at the same time"). This usually
+	/// means that state of all the pins will be changed in a single register operation.
+	fn write(&mut self, word: u32) -> core::result::Result<(), Self::Error>;
+
+	/// Set all pins to `PinState::High`
+	fn all_high(&mut self) -> core::result::Result<(), Self::Error> {
+		self.write(!0)
+	}
+
+	/// Reset all pins to `PinState::Low`
+	fn all_low(&mut self) -> core::result::Result<(), Self::Error> {
+		self.write(0)
+	}
+}
+
 pub mod bus;
-use bus::{DataBus, EightBitBus, FourBitBus, I2CBus};
+use bus::{DataBus, EightBitBus, EightBitPort, FourBitBus, FourBitPort, I2CBus};
 
 pub mod error;
 use error::Result;
@@ -94,9 +123,35 @@ impl<
 		d6: D6,
 		d7: D7,
 		delay: &mut D,
-	) -> Result<HD44780<EightBitBus<RS, EN, D0, D1, D2, D3, D4, D5, D6, D7>>> {
-		let mut hd = HD44780 {
+	) -> Result<Self> {
+		let mut hd = Self {
 			bus: EightBitBus::from_pins(rs, en, d0, d1, d2, d3, d4, d5, d6, d7),
+			entry_mode: EntryMode::default(),
+			display_mode: DisplayMode::default(),
+			display_size: DisplaySize::default(),
+		};
+
+		hd.init_8bit(delay)?;
+
+		Ok(hd)
+	}
+}
+
+impl<RS: OutputPin, EN: OutputPin, D07: OutputPort<8>> HD44780<EightBitPort<RS, EN, D07>> {
+	/// Create an instance of a `HD44780` from 8 data pins, a register select
+	/// pin, an enable pin and a struct implementing the delay trait.
+	/// - The delay instance is used to sleep between commands to
+	/// ensure the `HD44780` has enough time to process commands.
+	/// - The eight db0..db7 pins are used to send and recieve with
+	///  the `HD44780`.
+	/// - The register select pin is used to tell the `HD44780`
+	/// if incoming data is a command or data.
+	/// - The enable pin is used to tell the `HD44780` that there
+	/// is data on the 8 data pins and that it should read them in.
+	///
+	pub fn new_8bit_port<D: DelayUs<u16> + DelayMs<u8>>(rs: RS, en: EN, d07: D07, delay: &mut D) -> Result<Self> {
+		let mut hd = Self {
+			bus: EightBitPort::from_pins(rs, en, d07),
 			entry_mode: EntryMode::default(),
 			display_mode: DisplayMode::default(),
 			display_size: DisplaySize::default(),
@@ -161,9 +216,43 @@ impl<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin, D6: OutputPin, 
 		d6: D6,
 		d7: D7,
 		delay: &mut D,
-	) -> Result<HD44780<FourBitBus<RS, EN, D4, D5, D6, D7>>> {
-		let mut hd = HD44780 {
+	) -> Result<Self> {
+		let mut hd = Self {
 			bus: FourBitBus::from_pins(rs, en, d4, d5, d6, d7),
+			entry_mode: EntryMode::default(),
+			display_mode: DisplayMode::default(),
+			display_size: DisplaySize::default(),
+		};
+
+		hd.init_4bit(delay)?;
+
+		Ok(hd)
+	}
+}
+
+impl<RS: OutputPin, EN: OutputPin, D47: OutputPort<4>> HD44780<FourBitPort<RS, EN, D47>> {
+	/// Create an instance of a `HD44780` from 4 data pins, a register select
+	/// pin, an enable pin and a struct implementing the delay trait.
+	/// - The delay instance is used to sleep between commands to
+	/// ensure the `HD44780` has enough time to process commands.
+	/// - The four db0..db3 pins are used to send and recieve with
+	///  the `HD44780`.
+	/// - The register select pin is used to tell the `HD44780`
+	/// if incoming data is a command or data.
+	/// - The enable pin is used to tell the `HD44780` that there
+	/// is data on the 4 data pins and that it should read them in.
+	///
+	/// This mode operates differently than 8 bit mode by using 4 less
+	/// pins for data, which is nice on devices with less I/O although
+	/// the I/O takes a 'bit' longer
+	///
+	/// Instead of commands being sent byte by byte each command is
+	/// broken up into it's upper and lower nibbles (4 bits) before
+	/// being sent over the data bus
+	///
+	pub fn new_4bit_port<D: DelayUs<u16> + DelayMs<u8>>(rs: RS, en: EN, d47: D47, delay: &mut D) -> Result<Self> {
+		let mut hd = Self {
+			bus: FourBitPort::from_pins(rs, en, d47),
 			entry_mode: EntryMode::default(),
 			display_mode: DisplayMode::default(),
 			display_size: DisplaySize::default(),

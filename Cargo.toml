@@ -15,5 +15,5 @@ readme = "README.md"
 async = ["embassy-traits"]
 
 [dependencies]
-embedded-hal = "0.2.3"
+embedded-hal = "0.2.7"
 embassy-traits = { version = "0.0.2", optional = true }

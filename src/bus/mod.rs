@@ -4,8 +4,8 @@ mod eightbit;
 mod fourbit;
 mod i2c;
 
-pub use self::eightbit::EightBitBus;
-pub use self::fourbit::FourBitBus;
+pub use self::eightbit::{EightBitBus, EightBitPort};
+pub use self::fourbit::{FourBitBus, FourBitPort};
 pub use self::i2c::I2CBus;
 
 use crate::error::Result;

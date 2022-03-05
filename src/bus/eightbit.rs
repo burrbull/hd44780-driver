@@ -4,6 +4,7 @@ use embedded_hal::digital::v2::OutputPin;
 use crate::{
 	bus::DataBus,
 	error::{Error, Result},
+	OutputPort,
 };
 
 pub struct EightBitBus<
@@ -44,19 +45,8 @@ impl<
 	> EightBitBus<RS, EN, D0, D1, D2, D3, D4, D5, D6, D7>
 {
 	#[allow(clippy::too_many_arguments)]
-	pub fn from_pins(
-		rs: RS,
-		en: EN,
-		d0: D0,
-		d1: D1,
-		d2: D2,
-		d3: D3,
-		d4: D4,
-		d5: D5,
-		d6: D6,
-		d7: D7,
-	) -> EightBitBus<RS, EN, D0, D1, D2, D3, D4, D5, D6, D7> {
-		EightBitBus { rs, en, d0, d1, d2, d3, d4, d5, d6, d7 }
+	pub fn from_pins(rs: RS, en: EN, d0: D0, d1: D1, d2: D2, d3: D3, d4: D4, d5: D5, d6: D6, d7: D7) -> Self {
+		Self { rs, en, d0, d1, d2, d3, d4, d5, d6, d7 }
 	}
 
 	fn set_bus_bits(&mut self, data: u8) -> Result<()> {
@@ -134,6 +124,46 @@ impl<
 		D7: OutputPin,
 	> DataBus for EightBitBus<RS, EN, D0, D1, D2, D3, D4, D5, D6, D7>
 {
+	fn write<D: DelayUs<u16> + DelayMs<u8>>(&mut self, byte: u8, data: bool, delay: &mut D) -> Result<()> {
+		if data {
+			self.rs.set_high().map_err(|_| Error)?;
+		} else {
+			self.rs.set_low().map_err(|_| Error)?;
+		}
+
+		self.set_bus_bits(byte)?;
+
+		self.en.set_high().map_err(|_| Error)?;
+		delay.delay_ms(2u8);
+		self.en.set_low().map_err(|_| Error)?;
+
+		if data {
+			self.rs.set_low().map_err(|_| Error)?;
+		}
+
+		Ok(())
+	}
+}
+
+pub struct EightBitPort<RS: OutputPin, EN: OutputPin, D07: OutputPort<8>> {
+	rs: RS,
+	en: EN,
+	d07: D07,
+}
+
+impl<RS: OutputPin, EN: OutputPin, D07: OutputPort<8>> EightBitPort<RS, EN, D07> {
+	pub fn from_pins(rs: RS, en: EN, d07: D07) -> Self {
+		Self { rs, en, d07 }
+	}
+
+	fn set_bus_bits(&mut self, data: u8) -> Result<()> {
+		self.d07.write(data as u32).map_err(|_| Error)?;
+
+		Ok(())
+	}
+}
+
+impl<RS: OutputPin, EN: OutputPin, D07: OutputPort<8>> DataBus for EightBitPort<RS, EN, D07> {
 	fn write<D: DelayUs<u16> + DelayMs<u8>>(&mut self, byte: u8, data: bool, delay: &mut D) -> Result<()> {
 		if data {
 			self.rs.set_high().map_err(|_| Error)?;

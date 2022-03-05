@@ -3,6 +3,7 @@ use embedded_hal::digital::v2::OutputPin;
 
 use crate::bus::DataBus;
 use crate::error::{Error, Result};
+use crate::OutputPort;
 
 pub struct FourBitBus<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin, D6: OutputPin, D7: OutputPin> {
 	rs: RS,
@@ -16,8 +17,8 @@ pub struct FourBitBus<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin
 impl<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin, D6: OutputPin, D7: OutputPin>
 	FourBitBus<RS, EN, D4, D5, D6, D7>
 {
-	pub fn from_pins(rs: RS, en: EN, d4: D4, d5: D5, d6: D6, d7: D7) -> FourBitBus<RS, EN, D4, D5, D6, D7> {
-		FourBitBus { rs, en, d4, d5, d6, d7 }
+	pub fn from_pins(rs: RS, en: EN, d4: D4, d5: D5, d6: D6, d7: D7) -> Self {
+		Self { rs, en, d4, d5, d6, d7 }
 	}
 
 	fn write_lower_nibble(&mut self, data: u8) -> Result<()> {
@@ -89,6 +90,57 @@ impl<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin, D6: OutputPin, 
 impl<RS: OutputPin, EN: OutputPin, D4: OutputPin, D5: OutputPin, D6: OutputPin, D7: OutputPin> DataBus
 	for FourBitBus<RS, EN, D4, D5, D6, D7>
 {
+	fn write<D: DelayUs<u16> + DelayMs<u8>>(&mut self, byte: u8, data: bool, delay: &mut D) -> Result<()> {
+		if data {
+			self.rs.set_high().map_err(|_| Error)?;
+		} else {
+			self.rs.set_low().map_err(|_| Error)?;
+		}
+
+		self.write_upper_nibble(byte)?;
+
+		// Pulse the enable pin to recieve the upper nibble
+		self.en.set_high().map_err(|_| Error)?;
+		delay.delay_ms(2u8);
+		self.en.set_low().map_err(|_| Error)?;
+
+		self.write_lower_nibble(byte)?;
+
+		// Pulse the enable pin to recieve the lower nibble
+		self.en.set_high().map_err(|_| Error)?;
+		delay.delay_ms(2u8);
+		self.en.set_low().map_err(|_| Error)?;
+
+		if data {
+			self.rs.set_low().map_err(|_| Error)?;
+		}
+		Ok(())
+	}
+}
+
+pub struct FourBitPort<RS: OutputPin, EN: OutputPin, D47: OutputPort<4>> {
+	rs: RS,
+	en: EN,
+	d47: D47,
+}
+
+impl<RS: OutputPin, EN: OutputPin, D47: OutputPort<4>> FourBitPort<RS, EN, D47> {
+	pub fn from_pins(rs: RS, en: EN, d47: D47) -> Self {
+		Self { rs, en, d47 }
+	}
+
+	fn write_lower_nibble(&mut self, data: u8) -> Result<()> {
+		self.d47.write((data & 0xf) as u32).map_err(|_| Error)?;
+		Ok(())
+	}
+
+	fn write_upper_nibble(&mut self, data: u8) -> Result<()> {
+		self.d47.write((data >> 4) as u32).map_err(|_| Error)?;
+		Ok(())
+	}
+}
+
+impl<RS: OutputPin, EN: OutputPin, D47: OutputPort<4>> DataBus for FourBitPort<RS, EN, D47> {
 	fn write<D: DelayUs<u16> + DelayMs<u8>>(&mut self, byte: u8, data: bool, delay: &mut D) -> Result<()> {
 		if data {
 			self.rs.set_high().map_err(|_| Error)?;
