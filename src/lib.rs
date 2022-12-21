@@ -24,7 +24,7 @@ pub trait OutputPort<const N: usize> {
 	///
 	/// The state of all the port pins will change atomically ("at the same time"). This usually
 	/// means that state of all the pins will be changed in a single register operation.
-	fn write(&mut self, word: u32) -> core::result::Result<(), Self::Error>;
+	fn write(&mut self, word: u16) -> core::result::Result<(), Self::Error>;
 
 	/// Set all pins to `PinState::High`
 	fn all_high(&mut self) -> core::result::Result<(), Self::Error> {

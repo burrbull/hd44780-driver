@@ -130,12 +130,12 @@ impl<RS: OutputPin, EN: OutputPin, D47: OutputPort<4>> FourBitPort<RS, EN, D47> 
 	}
 
 	fn write_lower_nibble(&mut self, data: u8) -> Result<()> {
-		self.d47.write((data & 0xf) as u32).map_err(|_| Error)?;
+		self.d47.write((data & 0xf) as u16).map_err(|_| Error)?;
 		Ok(())
 	}
 
 	fn write_upper_nibble(&mut self, data: u8) -> Result<()> {
-		self.d47.write((data >> 4) as u32).map_err(|_| Error)?;
+		self.d47.write((data >> 4) as u16).map_err(|_| Error)?;
 		Ok(())
 	}
 }

@@ -157,7 +157,7 @@ impl<RS: OutputPin, EN: OutputPin, D07: OutputPort<8>> EightBitPort<RS, EN, D07>
 	}
 
 	fn set_bus_bits(&mut self, data: u8) -> Result<()> {
-		self.d07.write(data as u32).map_err(|_| Error)?;
+		self.d07.write(data as u16).map_err(|_| Error)?;
 
 		Ok(())
 	}
